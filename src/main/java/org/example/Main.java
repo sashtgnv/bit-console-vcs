@@ -1,7 +1,6 @@
 package org.example;
 
 import java.io.File;
-import java.io.FileNotFoundException;
 import java.io.FileOutputStream;
 import java.io.IOException;
 import java.time.LocalDateTime;
@@ -50,7 +49,7 @@ public class Main {
 
             createLogFile();
         } else {
-            System.out.println("репрзиторий уже был создан ранее");
+            System.out.println("репозиторий уже был создан ранее");
         }
     }
 
@@ -58,22 +57,26 @@ public class Main {
         File bitDir = new File(CURRENT_DIR + "/.bit");
         boolean isInit = bitDir.exists();
         if (isInit) {
-            try {
-                LocalDateTime date = LocalDateTime.now();
-                String formattedDate = date.format(DateTimeFormatter.ofLocalizedDateTime(FormatStyle.MEDIUM));
+             if (checkChagesFiles()) {
+                try {
+                    LocalDateTime date = LocalDateTime.now();
+                    String formattedDate = date.format(DateTimeFormatter.ofLocalizedDateTime(FormatStyle.MEDIUM));
 
-                String hash = Integer.toHexString(formattedDate.hashCode());
+                    String hash = Integer.toHexString(date.hashCode());
 
-                File commit = new File(BIT_DIR + '/' + hash);
-                commit.mkdir();
+                    File commit = new File(BIT_DIR + '/' + hash);
+                    commit.mkdir();
 
-                String[] params = {formattedDate, hash, message};
-                changeLogFile(params);
+                    String[] params = {formattedDate, hash, message};
+                    changeLogFile(params);
 
-                System.out.println("изменения сохранены " + formattedDate);
-            } catch (IOException e) {
-                System.err.println("ошибка создания коммита");
-            }
+                    System.out.println("изменения сохранены " + formattedDate);
+                } catch (IOException e) {
+                    System.err.println("ошибка создания коммита");
+                }
+            } else {
+                 System.out.println("сохранять нечего");
+             }
         } else {
             System.out.println("сначала создайте репозиторий коммандой \"git init\" ");
         }
@@ -100,5 +103,9 @@ public class Main {
             byte[] bytes = res.getBytes();
             fos.write(bytes);
         }
+    }
+
+    public static boolean checkChagesFiles(){
+        return true;
     }
 }
