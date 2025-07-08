@@ -5,21 +5,27 @@ import java.time.LocalDateTime;
 import java.time.ZoneOffset;
 import java.time.format.DateTimeFormatter;
 import java.time.format.FormatStyle;
-import java.util.*;
+import java.util.ArrayDeque;
+import java.util.Queue;
+import java.util.Stack;
 
 public class Main {
 
     public static String CURRENT_DIR;
     public static String BIT_DIR;
+    public static String OBJECTS_DIR;
+    public static String COMMITS_DIR;
     public static String LOG_FILE;
 
     static {
         CURRENT_DIR = System.getProperty("user.dir");
         BIT_DIR = CURRENT_DIR + "/.bit";
         LOG_FILE = BIT_DIR + "/log";
+        OBJECTS_DIR = BIT_DIR + "/objects";
+        COMMITS_DIR = BIT_DIR + "/commits";
     }
 
-    public static void main(String args[]) {
+    public static void main(String[] args) {
         if (args.length == 1) {
             switch (args[0]) {
                 case "init":
@@ -29,7 +35,7 @@ public class Main {
                     //TODO
                     break;
                 case "test":
-                    System.out.println(getLastCommitDateTime());
+                    saveChanges("81c9a88c");
                     break;
             }
         } else if (args.length == 3) {
@@ -49,26 +55,44 @@ public class Main {
         boolean created = bitDir.mkdir();
         if (created) {
             System.out.println("создан новый репозиторий");
-
-            createLogFile();
+            File logFile = new File(LOG_FILE);
+            File objDir = new File(OBJECTS_DIR);
+            File comDir = new File(COMMITS_DIR);
+            try {
+                logFile.createNewFile();
+                objDir.mkdir();
+                comDir.mkdir();
+            } catch (IOException e) {
+                System.err.println("ошибка инициализации репозитория");
+            }
         } else {
             System.err.println("репозиторий уже был создан ранее");
         }
     }
 
-    public static void commit(String message) {
+    public static boolean isInit() {
         File bitDir = new File(BIT_DIR);
-        boolean isInit = bitDir.exists();
-        if (isInit) {
-            if (canMakeCommit()) {
+        File logFile = new File(LOG_FILE);
+        File objDir = new File(OBJECTS_DIR);
+        File comDir = new File(COMMITS_DIR);
+        return bitDir.exists() && bitDir.isHidden() && bitDir.isDirectory() &&
+                logFile.exists() && logFile.isFile() &&
+                objDir.exists() && objDir.isDirectory() &&
+                comDir.exists() && comDir.isDirectory();
+    }
+
+    public static void commit(String message) {
+        if (isInit()) {
+            if (canCommit()) {
                 try {
                     LocalDateTime date = LocalDateTime.now();
                     String formattedDate = date.format(DateTimeFormatter.ofLocalizedDateTime(FormatStyle.MEDIUM));
 
                     String hash = Integer.toHexString(date.hashCode());
 
-                    File commit = new File(BIT_DIR + '/' + hash);
+                    File commit = new File(COMMITS_DIR + '/' + hash);
                     commit.mkdir();
+//                    saveChanges(hash);
 
                     String[] params = {formattedDate, hash, message};
                     changeLogFile(params);
@@ -85,14 +109,6 @@ public class Main {
         }
     }
 
-    public static void createLogFile() {
-        File logFile = new File(LOG_FILE);
-        try {
-            logFile.createNewFile();
-        } catch (IOException e) {
-            System.err.println("ошибка создания log-файла");
-        }
-    }
 
     public static void changeLogFile(String[] params) throws IOException {
         try (FileWriter fos = new FileWriter(LOG_FILE, true)) {
@@ -107,10 +123,11 @@ public class Main {
         }
     }
 
-    public static boolean canMakeCommit() {
+    /*проверяет в ширину дерево файлов, есть ли изменения*/
+    public static boolean canCommit() {
 
         File log = new File(LOG_FILE);
-        if (log.exists() && log.length()==0) {
+        if (log.exists() && log.length() == 0) {
             return true;
         }
 
@@ -130,16 +147,16 @@ public class Main {
             if (lastMod > commitMillis) {
                 flag = true;
                 break;
-            } else {
-                File[] children;
-                try {
-                    children = file.listFiles();
-                    for (File child : children) {
-                        if (child.getName().equals(".bit")) continue;
-                        queue.add(child);
-                    }
-                } catch (Exception e) {}
+            }
 
+            File[] children;
+            try {
+                children = file.listFiles();
+                for (File child : children) {
+                    if (child.getName().equals(".bit")) continue;
+                    queue.add(child);
+                }
+            } catch (Exception ignored) {
             }
         }
 
@@ -162,6 +179,41 @@ public class Main {
             System.err.println("ошибка во время парсинга log-файла");
 //            e.printStackTrace();
             return null;
+        }
+    }
+
+    public static void saveChanges(String hash) {
+        File root = new File(CURRENT_DIR);
+
+        Stack<File> stack = new Stack<>();
+//        stack.add(root);
+        try {
+            File[] children = root.listFiles();
+            for (File child : children) {
+                if (!child.getName().equals(".bit")) stack.push(child);
+            }
+        } catch (Exception ignored) {
+        }
+
+        while (!stack.isEmpty()) {
+
+            File file = stack.pop();
+            if (file.isDirectory()) {
+                File copyDir = new File(COMMITS_DIR +
+                        '/' + hash +
+                        '/' + file.getAbsolutePath().replace(CURRENT_DIR, ""));
+//                if (!copyDir.mkdir()) System.out.println("что то пошло не так");
+            } else {
+
+            }
+
+            try {
+                File[] children = file.listFiles();
+                for (File child : children) {
+                    if (!child.getName().equals(".bit")) stack.push(child);
+                }
+            } catch (Exception ignored) {
+            }
         }
     }
 }
