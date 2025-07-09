@@ -6,6 +6,7 @@ import java.time.ZoneOffset;
 import java.time.format.DateTimeFormatter;
 import java.time.format.FormatStyle;
 import java.util.ArrayDeque;
+import java.util.Arrays;
 import java.util.Queue;
 import java.util.Stack;
 
@@ -92,7 +93,7 @@ public class Main {
 
                     File commit = new File(COMMITS_DIR + '/' + hash);
                     commit.mkdir();
-//                    saveChanges(hash);
+                    saveChanges(hash);
 
                     String[] params = {formattedDate, hash, message};
                     changeLogFile(params);
@@ -112,14 +113,14 @@ public class Main {
 
     public static void changeLogFile(String[] params) throws IOException {
         try (FileWriter fos = new FileWriter(LOG_FILE, true)) {
-            String res = "";
-            for (int i = 0; i < params.length; i++) {
-                if (params[i] == null) break;
-                else res += params[i] + '\t';
+            StringBuilder res = new StringBuilder();
+            for (String param : params) {
+                if (param == null) break;
+                else res.append(param).append('\t');
             }
-            res += '\n';
+            res.append('\n');
 
-            fos.write(res);
+            fos.write(res.toString());
         }
     }
 
@@ -182,7 +183,7 @@ public class Main {
         }
     }
 
-    public static void saveChanges(String hash) {
+    public static void saveChanges(String commitHash) {
         File root = new File(CURRENT_DIR);
 
         Stack<File> stack = new Stack<>();
@@ -198,13 +199,34 @@ public class Main {
         while (!stack.isEmpty()) {
 
             File file = stack.pop();
+
             if (file.isDirectory()) {
                 File copyDir = new File(COMMITS_DIR +
-                        '/' + hash +
+                        '/' + commitHash +
                         '/' + file.getAbsolutePath().replace(CURRENT_DIR, ""));
-//                if (!copyDir.mkdir()) System.out.println("что то пошло не так");
+                copyDir.mkdir();
             } else {
+                try (FileInputStream fis = new FileInputStream(file)) {
+                    System.out.println(file.getName());
 
+                    byte[] buffer = new byte[64];
+                    while (fis.read(buffer) != -1) {
+
+                        Chunk chunk = new Chunk(buffer);
+                        File chunkFile = new File(OBJECTS_DIR + '/' + chunk.getHash());
+
+//                        if (!chunkFile.createNewFile()) System.out.println("такой чанк уже есть");
+
+                        try (FileOutputStream fos = new FileOutputStream(chunkFile)) {
+                            fos.write(chunk.getBytes());
+                        }
+
+
+                    }
+
+                } catch (Exception e) {
+                    e.printStackTrace();
+                }
             }
 
             try {
