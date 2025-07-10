@@ -199,30 +199,38 @@ public class Main {
         while (!stack.isEmpty()) {
 
             File file = stack.pop();
+            String pathForCopy = COMMITS_DIR +
+                    '/' + commitHash +
+                    '/' + file.getAbsolutePath().replace(CURRENT_DIR, "");
 
             if (file.isDirectory()) {
-                File copyDir = new File(COMMITS_DIR +
-                        '/' + commitHash +
-                        '/' + file.getAbsolutePath().replace(CURRENT_DIR, ""));
+                File copyDir = new File(pathForCopy);
                 copyDir.mkdir();
             } else {
                 try (FileInputStream fis = new FileInputStream(file)) {
-                    System.out.println(file.getName());
+
+                    File copyFile = new File(pathForCopy);
+                    copyFile.createNewFile();
 
                     byte[] buffer = new byte[64];
-                    while (fis.read(buffer) != -1) {
 
-                        Chunk chunk = new Chunk(buffer);
-                        File chunkFile = new File(OBJECTS_DIR + '/' + chunk.getHash());
+                    try (FileWriter fw = new FileWriter(copyFile)) {
 
-//                        if (!chunkFile.createNewFile()) System.out.println("такой чанк уже есть");
+                        while (fis.read(buffer) != -1) {
 
-                        try (FileOutputStream fos = new FileOutputStream(chunkFile)) {
-                            fos.write(chunk.getBytes());
+                            Chunk chunk = new Chunk(buffer);
+                            File chunkFile = new File(OBJECTS_DIR + '/' + chunk.getHash());
+
+//                            if (!chunkFile.createNewFile()) System.out.println("такой чанк уже есть");
+                            try (FileOutputStream fos = new FileOutputStream(chunkFile)) {
+                                fos.write(chunk.getBytes());
+                            }
+
+                            fw.append(chunk.getHash());
+                            Arrays.fill(buffer, (byte) 0);
                         }
-
-
                     }
+
 
                 } catch (Exception e) {
                     e.printStackTrace();
