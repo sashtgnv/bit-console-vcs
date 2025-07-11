@@ -10,7 +10,7 @@ public class Chunk {
 
     public Chunk(byte[] bytes) {
         this.bytes = bytes;
-        this.hash = getHash(bytes);
+        this.hash = makeHash(bytes);
     }
 
     public String getHash() {
@@ -21,7 +21,7 @@ public class Chunk {
         return bytes;
     }
 
-    private static String getHash(byte[] bytes) {
+    public static String makeHash(byte[] bytes) {
         try {
             MessageDigest md = MessageDigest.getInstance("SHA-256");
             byte[] fullHash = md.digest(bytes);

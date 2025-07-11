@@ -5,10 +5,7 @@ import java.time.LocalDateTime;
 import java.time.ZoneOffset;
 import java.time.format.DateTimeFormatter;
 import java.time.format.FormatStyle;
-import java.util.ArrayDeque;
-import java.util.Arrays;
-import java.util.Queue;
-import java.util.Stack;
+import java.util.*;
 
 public class Main {
 
@@ -33,10 +30,16 @@ public class Main {
                     init();
                     break;
                 case "log":
-                    //TODO
+                    log();
+                    break;
+                case "commit":
+                    System.out.println("чтобы сохранить изменения, используйте \"bit commit -m '<текст сообщения>'\"");
+                    break;
+                case "checkout":
+                    System.out.println("чтобы переключиться на другой коммит, используйте \"bit checkout -h <ваш коммит>\"");
                     break;
                 case "test":
-                    saveChanges("81c9a88c");
+
                     break;
             }
         } else if (args.length == 3) {
@@ -45,7 +48,8 @@ public class Main {
                     if (args[1].equals("-m")) commit(args[2]);
                     break;
                 case "checkout":
-                    //TODO
+                    if (args[1].equals("-h")) checkout(args[2]);
+
                     break;
             }
         }
@@ -89,7 +93,7 @@ public class Main {
                     LocalDateTime date = LocalDateTime.now();
                     String formattedDate = date.format(DateTimeFormatter.ofLocalizedDateTime(FormatStyle.MEDIUM));
 
-                    String hash = Integer.toHexString(date.hashCode());
+                    String hash = Chunk.makeHash(formattedDate.getBytes());
 
                     File commit = new File(COMMITS_DIR + '/' + hash);
                     commit.mkdir();
@@ -112,7 +116,7 @@ public class Main {
 
 
     public static void changeLogFile(String[] params) throws IOException {
-        try (FileWriter fos = new FileWriter(LOG_FILE, true)) {
+        try (FileWriter fw = new FileWriter(LOG_FILE, true)) {
             StringBuilder res = new StringBuilder();
             for (String param : params) {
                 if (param == null) break;
@@ -120,7 +124,9 @@ public class Main {
             }
             res.append('\n');
 
-            fos.write(res.toString());
+            fw.append(res.toString());
+        } catch (Exception e) {
+            throw new RuntimeException(e);
         }
     }
 
@@ -230,8 +236,6 @@ public class Main {
                             Arrays.fill(buffer, (byte) 0);
                         }
                     }
-
-
                 } catch (Exception e) {
                     e.printStackTrace();
                 }
@@ -246,4 +250,82 @@ public class Main {
             }
         }
     }
+
+    public static void log() {
+        File logFile = new File(LOG_FILE);
+        try (BufferedReader br = new BufferedReader(new FileReader(logFile))) {
+            String line;
+            while ((line = br.readLine()) != null) {
+                System.out.println(line);
+            }
+        } catch (Exception e) {
+            System.err.println("ошибка чтения log-файла");
+        }
+    }
+
+    public static void checkout(String commitHash) {
+        File commitDir = new File(COMMITS_DIR + '/' + commitHash);
+        if (commitDir.exists()) {
+            clearDir();
+
+            Stack<File> stack = new Stack<>();
+            try {
+                stack.addAll(List.of(commitDir.listFiles()));
+            } catch (Exception e) {
+                return;
+            }
+
+            while (!stack.isEmpty()) {
+                File file = stack.pop();
+                if (file.isDirectory()) {
+                    File newDir = new File(file.getAbsolutePath().replace(COMMITS_DIR + '/' + commitHash, CURRENT_DIR));
+                    newDir.mkdir();
+                } else {
+                    File newfile = new File(file.getAbsolutePath().replace(COMMITS_DIR + '/' + commitHash, CURRENT_DIR));
+                    try (FileOutputStream fos = new FileOutputStream(newfile)) {
+//                        TODO
+                    } catch (Exception e) {
+                        e.printStackTrace();
+                    }
+                }
+
+                try {
+                    stack.addAll(List.of(file.listFiles()));
+                } catch (Exception ignored) {
+                }
+            }
+
+        } else System.out.println("такого коммита не существует");
+
+    }
+
+    public static void clearDir() {
+        File root = new File(CURRENT_DIR);
+
+        Stack<File> stack = new Stack<>();
+        try {
+            for (File child : root.listFiles()) {
+                if (!child.getName().equals(".bit")) {
+                    stack.push(child);
+                }
+            }
+        } catch (NullPointerException e) {
+            return;
+        }
+
+        while (!stack.isEmpty()) {
+            File file = stack.peek();
+            if (!file.delete()) {
+                try {
+                    for (File child : file.listFiles()) {
+                        if (!child.delete() && child.isDirectory()) {
+                            stack.push(child);
+                        }
+                    }
+                } catch (NullPointerException ignored) {
+                }
+            } else stack.pop();
+        }
+    }
+
 }
