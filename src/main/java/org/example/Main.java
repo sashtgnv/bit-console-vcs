@@ -24,34 +24,54 @@ public class Main {
     }
 
     public static void main(String[] args) {
-        if (args.length == 1) {
-            switch (args[0]) {
-                case "init":
-                    init();
-                    break;
-                case "log":
-                    log();
-                    break;
-                case "commit":
-                    System.out.println("чтобы сохранить изменения, используйте \"bit commit -m '<текст сообщения>'\"");
-                    break;
-                case "checkout":
-                    System.out.println("чтобы переключиться на другой коммит, используйте \"bit checkout -h <ваш коммит>\"");
-                    break;
-                case "test":
-
-                    break;
+        String help = """
+                неверная команда.
+                список доступных команд:
+                bit init\t\t\t\t\tинициализация репозитория
+                bit commit -m '<текст сообщения>'\t\tсохранение изменений
+                bit checkout -h <ваш коммит>\t\t\tпереключение на другой коммит
+                bit log\t\t\t\t\t\tпросмотр истории коммитов
+                bit help\t\t\t\t\tвывести эту справку
+                """;
+        switch (args.length) {
+            case 1: {
+                switch (args[0]) {
+                    case "init":
+                        init();
+                        break;
+                    case "log":
+                        log();
+                        break;
+                    case "commit":
+                        System.out.println("чтобы сохранить изменения, используйте \"bit commit -m '<текст сообщения>'\"");
+                        break;
+                    case "checkout":
+                        System.out.println("чтобы переключиться на другой коммит, используйте \"bit checkout -h <ваш коммит>\"");
+                        break;
+                    default:
+                        System.out.println(help);
+                        break;
+                }
+                break;
             }
-        } else if (args.length == 3) {
-            switch (args[0]) {
-                case "commit":
-                    if (args[1].equals("-m")) commit(args[2]);
-                    break;
-                case "checkout":
-                    if (args[1].equals("-h")) checkout(args[2]);
-
-                    break;
+            case 3: {
+                switch (args[0]) {
+                    case "commit":
+                        if (args[1].equals("-m")) commit(args[2]);
+                        break;
+                    case "checkout":
+                        if (args[1].equals("-h")) checkout(args[2]);
+                        break;
+                    default:
+                        System.out.println(help);
+                        break;
+                }
+                break;
             }
+
+            default:
+                System.out.println(help);
+                break;
         }
     }
 
@@ -109,9 +129,8 @@ public class Main {
             } else {
                 System.err.println("сохранять нечего");
             }
-        } else {
+        } else
             System.err.println("сначала создайте репозиторий коммандой \"git init\" ");
-        }
     }
 
 
@@ -221,19 +240,26 @@ public class Main {
                     byte[] buffer = new byte[64];
 
                     try (FileWriter fw = new FileWriter(copyFile)) {
-
-                        while (fis.read(buffer) != -1) {
+                        int count = 0;
+                        while ((count = fis.read(buffer)) != -1) {
 
                             Chunk chunk = new Chunk(buffer);
                             File chunkFile = new File(OBJECTS_DIR + '/' + chunk.getHash());
 
 //                            if (!chunkFile.createNewFile()) System.out.println("такой чанк уже есть");
                             try (FileOutputStream fos = new FileOutputStream(chunkFile)) {
-                                fos.write(chunk.getBytes());
+                                if (count == 64) {
+                                    fos.write(chunk.getBytes());
+                                } else {
+                                    for (int i = 0; i < count; i++) {
+                                        fos.write(chunk.getBytes()[i]);
+                                    }
+                                }
                             }
 
                             fw.append(chunk.getHash());
                             Arrays.fill(buffer, (byte) 0);
+
                         }
                     }
                 } catch (Exception e) {
@@ -264,39 +290,70 @@ public class Main {
     }
 
     public static void checkout(String commitHash) {
-        File commitDir = new File(COMMITS_DIR + '/' + commitHash);
-        if (commitDir.exists()) {
-            clearDir();
+        if (isInit()) {
+            File commitDir = new File(COMMITS_DIR + '/' + commitHash);
+            if (commitDir.exists()) {
+                clearDir();
 
-            Stack<File> stack = new Stack<>();
-            try {
-                stack.addAll(List.of(commitDir.listFiles()));
-            } catch (Exception e) {
-                return;
-            }
+                Stack<File> stack = new Stack<>();
+                try {
+                    stack.addAll(List.of(commitDir.listFiles()));
+                } catch (Exception e) {
+                    return;
+                }
 
-            while (!stack.isEmpty()) {
-                File file = stack.pop();
-                if (file.isDirectory()) {
-                    File newDir = new File(file.getAbsolutePath().replace(COMMITS_DIR + '/' + commitHash, CURRENT_DIR));
-                    newDir.mkdir();
-                } else {
-                    File newfile = new File(file.getAbsolutePath().replace(COMMITS_DIR + '/' + commitHash, CURRENT_DIR));
-                    try (FileOutputStream fos = new FileOutputStream(newfile)) {
-//                        TODO
-                    } catch (Exception e) {
-                        e.printStackTrace();
+                while (!stack.isEmpty()) {
+                    File file = stack.pop();
+                    if (file.isDirectory()) {
+                        File newDir = new File(file.getAbsolutePath().replace(COMMITS_DIR + '/' + commitHash, CURRENT_DIR));
+                        newDir.mkdir();
+                    } else {
+
+                        ArrayList<String> chunks = new ArrayList<>();
+                        char[] cbuf = new char[16];
+
+                        try (FileReader reader = new FileReader(file)) {
+                            while (reader.read(cbuf) != -1) {
+                                String chunk = String.valueOf(cbuf);
+                                chunks.add(chunk);
+                            }
+                        } catch (Exception e) {
+                            e.printStackTrace();
+                        }
+
+                        File newfile = new File(file.getAbsolutePath().replace(COMMITS_DIR + '/' + commitHash, CURRENT_DIR));
+
+                        try (FileOutputStream fos = new FileOutputStream(newfile, true)) {
+                            byte[] bbuf = new byte[64];
+
+                            for (String chunkName : chunks) {
+                                File chunk = new File(OBJECTS_DIR + '/' + chunkName);
+                                int count = 0;
+                                try (FileInputStream fis = new FileInputStream(chunk)) {
+                                    count = fis.read(bbuf);
+                                }
+                                if (count == 64) {
+                                    fos.write(bbuf);
+                                } else {
+                                    for (int i = 0; i < count; i++) {
+                                        fos.write(bbuf[i]);
+                                    }
+                                }
+                            }
+                        } catch (Exception e) {
+                            e.printStackTrace();
+                        }
+                    }
+
+                    try {
+                        stack.addAll(List.of(file.listFiles()));
+                    } catch (Exception ignored) {
                     }
                 }
 
-                try {
-                    stack.addAll(List.of(file.listFiles()));
-                } catch (Exception ignored) {
-                }
-            }
-
-        } else System.out.println("такого коммита не существует");
-
+            } else System.out.println("такого коммита не существует");
+        } else
+            System.err.println("сначала создайте репозиторий коммандой \"git init\" ");
     }
 
     public static void clearDir() {
@@ -327,5 +384,4 @@ public class Main {
             } else stack.pop();
         }
     }
-
 }
